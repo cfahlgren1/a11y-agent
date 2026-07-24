@@ -25,6 +25,9 @@ uv.lock
 .coverage
 htmlcov/
 
+# Generated audit output (screenshots, reports)
+results/
+
 # Editor / OS
 .vscode/
 .idea/

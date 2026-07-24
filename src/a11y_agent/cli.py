@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
@@ -15,6 +16,7 @@ from rich.panel import Panel
 from .agent import build_agent, compose_system_prompt
 from .browser import browser_tools, check_agent_browser
 from .rendering import StreamRenderer
+from .report import build_report_tool
 from .skills import build_load_skill_tool, load_skills, render_listing
 
 app = typer.Typer(add_completion=False)
@@ -76,27 +78,49 @@ def main(
         os.environ["AGENT_BROWSER_AUTO_CONNECT"] = "1"
 
     question_text = " ".join(question)
+    output_dir = _prepare_output_dir()
 
     console.print(Panel.fit(question_text, title="Prompt", border_style="cyan"))
     console.rule("[bold blue]Agent stream")
 
     try:
-        asyncio.run(_run(question_text, model))
+        asyncio.run(_run(question_text, model, output_dir))
     except KeyboardInterrupt:
         console.print("\n[red]Interrupted.[/red]")
         raise typer.Exit(code=130) from None
     except Exception as exc:
         console.print(f"\n[bold red]Agent run failed:[/bold red] {exc}")
         raise typer.Exit(code=1) from None
+    finally:
+        report = output_dir / "report.md"
+        if report.exists():
+            console.print()
+            console.print(Panel.fit(str(report), title="Report saved", border_style="green"))
 
 
-async def _run(question_text: str, model: Optional[str]) -> None:
+def _prepare_output_dir() -> Path:
+    """Resolve the output directory (default ./results), create it, and point
+    agent-browser's screenshots there unless the user overrode the location."""
+    override = os.environ.get("AGENT_BROWSER_SCREENSHOT_DIR")
+    output_dir = (Path(override) if override else Path("results")).resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["AGENT_BROWSER_SCREENSHOT_DIR"] = str(output_dir)
+    return output_dir
+
+
+async def _run(question_text: str, model: Optional[str], output_dir: Path) -> None:
     """Load skills + browser tools, build the agent, and stream the run."""
     skills = load_skills()
-    system_prompt = compose_system_prompt(render_listing(skills))
+    output_note = (
+        "# Output directory\n"
+        f"Screenshots are saved into this absolute directory: {output_dir}\n"
+        "Save the final report with the save_report tool (writes report.md there) and "
+        "reference screenshots by their bare filename."
+    )
+    system_prompt = compose_system_prompt(render_listing(skills), output_note)
 
     async with browser_tools() as browser:
-        tools = [TavilySearch(), TavilyMap(), *browser]
+        tools = [TavilySearch(), TavilyMap(), *browser, build_report_tool(output_dir)]
         if skills:
             tools.append(build_load_skill_tool(skills))
         agent = build_agent(tools, model=model, system_prompt=system_prompt)
