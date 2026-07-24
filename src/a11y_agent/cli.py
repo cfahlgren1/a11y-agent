@@ -8,7 +8,7 @@ from typing import Annotated, Optional
 
 import typer
 from dotenv import load_dotenv
-from langchain_tavily import TavilySearch
+from langchain_tavily import TavilyMap, TavilySearch
 from rich.console import Console
 from rich.panel import Panel
 
@@ -79,7 +79,7 @@ def main(
 async def _run(question_text: str, model: Optional[str]) -> None:
     """Load browser tools over MCP, build the agent, and stream the run."""
     async with browser_tools() as browser:
-        tools = [TavilySearch(), *browser]
+        tools = [TavilySearch(), TavilyMap(), *browser]
         agent = build_agent(tools, model=model)
         stream = agent.astream(
             {"messages": [{"role": "user", "content": question_text}]},
