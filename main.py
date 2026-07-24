@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #   "langchain>=1.0.0",
-#   "langchain-mcp-adapters>=0.1.0",
+#   "langchain-mcp-adapters>=0.3.0",
 #   "langchain-nebius>=0.1.0",
 #   "langchain-tavily>=0.2.0",
 #   "python-dotenv>=1.0.0",

@@ -75,12 +75,27 @@ session:
 2. Run the agent with autoconnect on — it discovers and attaches to that Chrome:
 
    ```sh
-   AGENT_BROWSER_AUTO_CONNECT=1 uv run main.py "audit the accessibility of my dashboard at https://app.example.com/home"
+   uv run main.py --auto-connect "audit the accessibility of my dashboard at https://app.example.com/home"
    ```
 
-Screenshots and audits then reflect the real, authenticated page. Any `AGENT_BROWSER_*`
-variable you set is forwarded to the browser (e.g. `AGENT_BROWSER_SCREENSHOT_DIR`); your
-API keys are not.
+   (`--auto-connect` just sets `AGENT_BROWSER_AUTO_CONNECT=1`; you can export that yourself
+   instead.)
+
+Screenshots and audits then reflect the real, authenticated page, and the agent will not
+close your browser on exit. Any `AGENT_BROWSER_*` variable you set is forwarded to the
+browser (e.g. `AGENT_BROWSER_SCREENSHOT_DIR`); your API keys are not.
+
+## Auditing untrusted pages
+
+The agent has the full agent-browser tool surface, including JavaScript `eval` and
+session/state tools. A malicious page could attempt prompt injection to misuse them. When
+pointing the agent at pages you don't trust, restrict what the browser can reach:
+
+```sh
+AGENT_BROWSER_ALLOWED_DOMAINS="example.com,*.example.com" uv run main.py "audit https://example.com"
+```
+
+Keep autoconnect (your logged-in Chrome) for sites you trust.
 
 ## Skills
 
@@ -91,18 +106,20 @@ prompt and, when a request matches, calls a `load_skill` tool to pull in the ful
 instructions (progressive disclosure — bodies only cost tokens when used). This is the
 [SKILL.md](https://agentskills.io) open standard, so skills also work in Claude Code.
 
-Ships with `accessibility-audit`. Add your own by dropping a new folder under `skills/`;
-point elsewhere with `A11Y_AGENT_SKILLS_DIR`.
+Ships with a built-in `accessibility-audit` skill (packaged inside `a11y_agent`, so it's
+present in installed copies too). Add your own by pointing `A11Y_AGENT_SKILLS_DIR` at a
+directory of `<name>/SKILL.md` folders — those are merged in and override built-ins with
+the same name.
 
 ## Layout
 
 ```
-skills/accessibility-audit/SKILL.md   # the a11y audit workflow (a loadable skill)
 src/a11y_agent/
-├── agent.py       # model + general system prompt + builds the LangChain agent
-├── browser.py     # agent-browser preflight + loads its MCP tools into LangChain
-├── skills.py      # discover / parse SKILL.md files + the load_skill tool
-├── rendering.py   # rich rendering of the streamed tool calls / results / text
-└── cli.py         # typer command, env/binary checks, wires the tools together
-main.py            # thin `uv run` entry point
+├── agent.py        # model + general system prompt + builds the LangChain agent
+├── browser.py      # agent-browser preflight + loads its MCP tools + browser cleanup
+├── skills.py       # discover / parse SKILL.md files + the load_skill tool
+├── builtin_skills/ # packaged skills, e.g. accessibility-audit/SKILL.md
+├── rendering.py    # rich rendering of the streamed tool calls / results / text
+└── cli.py          # typer command, env/binary checks, wires the tools together
+main.py             # thin `uv run` entry point
 ```

@@ -12,6 +12,7 @@ calls within one run.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import os
 import re
@@ -98,6 +99,32 @@ def check_agent_browser() -> str | None:
     return None
 
 
+def _expects_sentinel(profile: str) -> bool:
+    """Whether SENTINEL_TOOL should be present for this profile.
+
+    The a11y tool lives in the `debug` profile (and thus in `all`); only those span
+    enough tools that pagination matters. Narrower profiles legitimately omit it.
+    """
+    parts = {part.strip() for part in profile.split(",")}
+    return "all" in parts or "debug" in parts
+
+
+def _is_autoconnect() -> bool:
+    """True when attached to the user's own Chrome — we must not close their browser."""
+    return bool(os.getenv("AGENT_BROWSER_AUTO_CONNECT"))
+
+
+async def _close_browser(session: ClientSession) -> None:
+    """Best-effort close of the browser session so Chromium/page state don't leak.
+
+    Skipped under autoconnect (that's the user's Chrome). Bounded by a timeout and
+    swallows errors — cleanup must never mask the original outcome."""
+    if _is_autoconnect():
+        return
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(session.call_tool("agent_browser_close", {}), timeout=10)
+
+
 @contextlib.asynccontextmanager
 async def browser_tools(profile: str = DEFAULT_TOOL_PROFILE) -> AsyncIterator[list[Any]]:
     """Start `agent-browser mcp` and yield its tools as LangChain tools.
@@ -107,7 +134,8 @@ async def browser_tools(profile: str = DEFAULT_TOOL_PROFILE) -> AsyncIterator[li
             agent = build_agent([*other_tools, *tools])
             ...
 
-    The subprocess and browser are torn down when the context exits.
+    On exit — success, error, or interrupt — the browser session is closed and the MCP
+    subprocess is torn down.
     """
     server = StdioServerParameters(
         command="agent-browser",
@@ -120,10 +148,13 @@ async def browser_tools(profile: str = DEFAULT_TOOL_PROFILE) -> AsyncIterator[li
             tools = await load_mcp_tools(session)
 
             names = {tool.name for tool in tools}
-            if SENTINEL_TOOL not in names:
+            if _expects_sentinel(profile) and SENTINEL_TOOL not in names:
                 raise RuntimeError(
                     f"agent-browser MCP loaded {len(tools)} tools but '{SENTINEL_TOOL}' "
                     "is missing — the client likely did not follow tool-list pagination. "
                     "Upgrade langchain-mcp-adapters so it pages through nextCursor."
                 )
-            yield tools
+            try:
+                yield tools
+            finally:
+                await _close_browser(session)

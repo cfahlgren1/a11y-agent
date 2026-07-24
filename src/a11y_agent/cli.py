@@ -56,11 +56,24 @@ def main(
         Optional[str],
         typer.Option(help="Model name (defaults to A11Y_AGENT_MODEL env var, then a built-in default)"),
     ] = None,
+    auto_connect: Annotated[
+        bool,
+        typer.Option(
+            "--auto-connect",
+            help="Attach to your already-running Chrome (reuse its cookies/login) instead "
+            "of launching a fresh browser. Start Chrome with --remote-debugging-port first.",
+        ),
+    ] = False,
 ) -> None:
     """Drive a browser-equipped agent with a prompt to inspect and audit web pages."""
     load_dotenv()
     require_env()
     require_agent_browser()
+
+    if auto_connect:
+        # Downstream: browser.py forwards this to the MCP subprocess and skips the
+        # session close so we never shut down the user's own Chrome.
+        os.environ["AGENT_BROWSER_AUTO_CONNECT"] = "1"
 
     question_text = " ".join(question)
 

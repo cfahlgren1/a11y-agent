@@ -18,8 +18,8 @@ from typing import Any
 import frontmatter
 from langchain_core.tools import tool
 
-# skills/ lives at the project root: src/a11y_agent/skills.py -> parents[2] is the root.
-DEFAULT_SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
+# Built-in skills ship inside the package so installed wheels aren't skill-less.
+BUILTIN_SKILLS_DIR = Path(__file__).resolve().parent / "builtin_skills"
 
 
 @dataclass(frozen=True)
@@ -30,23 +30,27 @@ class Skill:
     path: Path
 
 
-def skills_dir() -> Path:
-    """Skills directory, overridable via A11Y_AGENT_SKILLS_DIR."""
+def skill_roots() -> list[Path]:
+    """Directories to scan: packaged built-ins, then an optional user dir that can add
+    to or override them via A11Y_AGENT_SKILLS_DIR (later roots win on name clash)."""
+    roots = [BUILTIN_SKILLS_DIR]
     override = os.getenv("A11Y_AGENT_SKILLS_DIR")
-    return Path(override) if override else DEFAULT_SKILLS_DIR
+    if override:
+        roots.append(Path(override))
+    return roots
 
 
-def load_skills(root: Path | None = None) -> dict[str, Skill]:
-    """Discover `*/SKILL.md` under `root` and parse each into a Skill, keyed by name."""
-    root = root or skills_dir()
+def load_skills(roots: list[Path] | None = None) -> dict[str, Skill]:
+    """Discover `*/SKILL.md` across `roots` and parse each into a Skill, keyed by name."""
     skills: dict[str, Skill] = {}
-    if not root.is_dir():
-        return skills
-    for skill_md in sorted(root.glob("*/SKILL.md")):
-        post = frontmatter.load(str(skill_md))
-        name = str(post.get("name") or skill_md.parent.name).strip()
-        description = str(post.get("description") or "").strip()
-        skills[name] = Skill(name, description, post.content.strip(), skill_md)
+    for root in roots or skill_roots():
+        if not root.is_dir():
+            continue
+        for skill_md in sorted(root.glob("*/SKILL.md")):
+            post = frontmatter.load(str(skill_md))
+            name = str(post.get("name") or skill_md.parent.name).strip()
+            description = str(post.get("description") or "").strip()
+            skills[name] = Skill(name, description, post.content.strip(), skill_md)
     return skills
 
 
