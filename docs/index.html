@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How I Built This — a11y-agent</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  document.querySelectorAll('script[type="text/markdown"]').forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'md';
+    div.innerHTML = marked.parse(s.textContent);
+    s.replaceWith(div);
+  });
+  mermaid.initialize({ startOnLoad: false, theme: 'neutral', fontFamily: 'ui-sans-serif, system-ui, sans-serif' });
+  await mermaid.run({ querySelector: '.mermaid' });
+</script>
+<style>
+  :root {
+    --bg: #ffffff; --sidebar-bg: #fafafa; --border: #e5e7eb;
+    --text: #1a1a1a; --muted: #6b7280; --accent: #2563eb;
+    --code-bg: #f3f4f6; --card-bg: #fafafa;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); background: var(--bg); line-height: 1.65; }
+  .layout { display: flex; min-height: 100vh; }
+
+  nav.sidebar { width: 280px; flex-shrink: 0; background: var(--sidebar-bg); border-right: 1px solid var(--border); padding: 28px 20px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .sidebar .brand { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  .sidebar .brand span { color: var(--muted); font-weight: 400; }
+  .sidebar .meta { font-size: 12.5px; color: var(--muted); margin-bottom: 22px; }
+  .sidebar a { display: block; padding: 6px 10px; margin: 1px 0; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 14px; }
+  .sidebar a:hover { background: #f0f0f1; }
+  .sidebar a.sub { padding-left: 24px; color: var(--muted); font-size: 13.5px; }
+  .sidebar .group { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 10px 6px; }
+
+  main { flex: 1; min-width: 0; padding: 44px 56px 96px; max-width: 980px; }
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .subtitle { color: var(--muted); font-size: 16px; margin-bottom: 28px; }
+  h2 { font-size: 22px; margin: 48px 0 12px; letter-spacing: -0.01em; }
+  h3 { font-size: 17px; margin: 26px 0 10px; }
+  p, li { font-size: 15px; }
+  a { color: var(--accent); }
+  code { background: var(--code-bg); border-radius: 4px; padding: 1.5px 5px; font-size: 13px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  pre code { background: none; padding: 0; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 14px 0; }
+  th, td { border: 1px solid var(--border); padding: 7px 11px; text-align: left; vertical-align: top; }
+  th { background: var(--sidebar-bg); font-weight: 600; }
+  blockquote { border-left: 3px solid var(--border); margin: 14px 0; padding: 2px 16px; color: var(--muted); }
+
+  .diagram { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin: 18px 0; overflow-x: auto; }
+  .diagram .mermaid { display: flex; justify-content: center; }
+  .caption { font-size: 13px; color: var(--muted); text-align: center; margin-top: 10px; }
+
+  details { border: 1px solid var(--border); border-radius: 10px; margin: 16px 0; background: var(--card-bg); }
+  details summary { cursor: pointer; padding: 13px 18px; font-weight: 600; font-size: 15px; }
+  details summary:hover { background: #f0f0f1; border-radius: 10px; }
+  details .inner { padding: 4px 22px 18px; border-top: 1px solid var(--border); background: var(--bg); border-radius: 0 0 10px 10px; }
+
+  .badge { display: inline-block; font-size: 11.5px; font-weight: 600; border-radius: 99px; padding: 1px 9px; vertical-align: 1px; }
+  .badge.high { background: #fee2e2; color: #b91c1c; }
+  .badge.med { background: #ffedd5; color: #c2410c; }
+  .badge.low { background: #e0e7ff; color: #4338ca; }
+  .badge.mod { background: #ffedd5; color: #c2410c; }
+  .badge.minor { background: #f3f4f6; color: #6b7280; }
+
+  .note { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 18px; font-size: 14px; margin: 16px 0; }
+
+  @media (max-width: 900px) {
+    nav.sidebar { display: none; }
+    main { padding: 28px 20px 80px; }
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: #374151; }
+  .chip .ln { color: var(--muted); }
+
+  .preview { --card: var(--bg); position: relative; border: 1px solid var(--border); border-radius: 12px; margin: 18px 0; background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.03); cursor: pointer; }
+  .preview:hover { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .preview-head { display: flex; align-items: center; gap: 9px; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--sidebar-bg); border-radius: 12px 12px 0 0; font-weight: 600; font-size: 14px; }
+  .preview-head .doc-ico { width: 15px; height: 15px; color: var(--muted); flex-shrink: 0; }
+  .preview-head .sub { font-weight: 400; color: var(--muted); font-size: 12.5px; margin-left: auto; font-family: ui-monospace, Menlo, monospace; }
+  .preview-body { max-height: 376px; overflow: hidden; padding: 4px 24px 60px; }
+  .preview-body .md h2:first-child, .preview-body .md h1:first-child { margin-top: 12px; }
+  .preview-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: linear-gradient(to bottom, rgba(255,255,255,0), var(--card) 55%); border-radius: 0 0 12px 12px; pointer-events: none; }
+  .preview.plan { --card: #fffaf4; border-color: #f0dcc3; }
+  .preview.plan .preview-head { background: #fbf0e1; border-color: #f0dcc3; color: #7c4a21; }
+  .preview.plan .preview-head .doc-ico, .preview.plan .preview-head .sub { color: #b0834f; }
+  .preview.plan .expand-btn { background: #fffaf4; border-color: #f0dcc3; color: #7c4a21; }
+  .preview.plan .expand-btn:hover { background: #fbf0e1; }
+  #excal, #excal .excalidraw { pointer-events: none; user-select: none; }
+  .expand-btn { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--bg); border: 1px solid var(--border); border-radius: 99px; padding: 6px 16px; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.08); font-family: inherit; }
+  .expand-btn:hover { background: var(--sidebar-bg); }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(17,17,19,.45); display: flex; align-items: center; justify-content: center; padding: 32px; z-index: 50; }
+  .modal-overlay[hidden] { display: none; }
+  .modal { background: var(--bg); border-radius: 14px; max-width: 860px; width: 100%; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  .modal-head { display: flex; align-items: center; gap: 10px; padding: 14px 22px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 15px; }
+  .modal-close { margin-left: auto; background: none; border: none; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+  .modal-close:hover { background: var(--code-bg); color: var(--text); }
+  .modal-body { overflow-y: auto; padding: 6px 28px 24px; }
+  .modal.plan { background: #fffaf4; }
+  .modal.plan .modal-head { background: #fbf0e1; border-color: #f0dcc3; color: #7c4a21; border-radius: 14px 14px 0 0; }
+  .modal.plan .modal-close { color: #b0834f; }
+  .modal.plan .modal-close:hover { background: #f6e5cd; color: #7c4a21; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="sidebar">
+  <div class="brand">a11y-agent <span>/ build record</span></div>
+  <div class="meta">Tavily FDE take-home · Option 1<br>Built 2026-07-24 · one session · ~4.5h</div>
+  <a href="#overview">Overview</a>
+  <a href="#context" class="sub">Why no chat log</a>
+  <a href="#process">Build process</a>
+  <a href="#research" class="sub">Research fan-out</a>
+  <div class="group">Primary sources</div>
+  <a href="#plan">The plan (verbatim)</a>
+  <a href="#codex">Codex review (verbatim)</a>
+  <a href="#probes">Verification probes</a>
+  <a href="#report">Saving the report</a>
+  <div class="group">Outcome</div>
+  <a href="#commits">Commits</a>
+  <div class="group">Appendix</div>
+  <a href="#artifacts">Surviving artifacts</a>
+</nav>
+
+<main>
+
+<h1 id="overview">How I built a11y-agent</h1>
+<p class="subtitle">Turning the take-home's <code>starter_agent.py</code> into an accessibility &amp; layout audit agent that drives a real browser, discovers pages with Tavily Map, and writes an evidence-backed report — then audits Tavily's own dashboard with it.</p>
+
+<details id="context">
+<summary>Context: why this page exists (there is no chat log)</summary>
+<div class="inner">
+<p>The take-home asks for "a record of how you built this." The build happened in one Claude Code session — but its transcript was never saved: the terminal had inherited an internal <code>CLAUDE_CODE_CHILD_SESSION</code> env marker that silently turns transcript saving off. Diagnosed post-hoc by walking the marker up the process tree, PID by PID. This page is the honest substitute: a forensic reconstruction from everything that <em>did</em> survive.</p>
+<pre>WHY THE TRANSCRIPT WENT AWAY
+
+  earlier Claude Code session
+  │  exports CLAUDE_CODE_CHILD_SESSION=1 into its child processes
+  │  (so nested claude runs don't save duplicate transcripts)
+  │
+  └─▶ ran `cursor .` from inside that session
+      │
+      └─▶ Cursor (new instance)
+          │  inherits the whole environment, marker included,
+          │  and keeps it for its entire lifetime
+          │
+          └─▶ Cursor integrated terminal (zsh)
+              │  inherits it again — nothing in .zshrc sets or clears it
+              │
+              └─▶ `claude` (the build session)
+                     sees CLAUDE_CODE_CHILD_SESSION=1
+                     → "I must be a nested child session"
+                     → no .jsonl written, silently
+                       (warning banner only added in v2.1.217+)
+
+  What still got written, marker or not:
+    ✓ subagent metadata        ✓ file-history snapshots
+    ✓ saved tool results       ✓ git commits
+    ✓ results/report.md + screenshots
+  …which is exactly what this reconstruction is built from.</pre>
+</div>
+</details>
+
+<h2 id="process">Build process</h2>
+<p>Six phases in one session. Research fanned out to parallel subagents before any code was written; an independent Codex review and throwaway probe scripts kept the middle honest; the session ended by running the finished agent against Tavily's own logged-in dashboard.</p>
+
+<div class="diagram" style="padding: 0; overflow: hidden;">
+  <div id="excal" style="height: 640px;">
+    <img src="assets/build-process.svg" alt="Build process diagram" style="width: 100%; height: 100%; object-fit: contain; padding: 16px; box-sizing: border-box;">
+  </div>
+  <div class="caption" style="padding: 0 0 12px;">Pan and zoom — drawn in Excalidraw during the reconstruction.</div>
+</div>
+<script type="application/json" id="scene-data">{"type":"excalidraw","version":2,"source":"claude-code","appState":{"viewBackgroundColor":"#ffffff"},"elements":[{"type":"text","id":"title","x":180,"y":8,"width":720,"height":33,"text":"a11y-agent build \u2014 one Claude Code session (2026-07-24)","fontSize":26,"fontFamily":1,"textAlign":"left","verticalAlign":"top"},{"type":"rectangle","id":"p0","x":40,"y":70,"width":280,"height":64,"roundness":{"type":3},"backgroundColor":"#a5d8ff","fillStyle":"solid","strokeColor":"#4a9eed","boundElements":[{"type":"text","id":"tp0"}]},{"type":"text","id":"tp0","x":50,"y":82,"width":260,"height":40,"text":"09:26 Reorganize\nstarter agent -> src/ package","fontSize":16,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"p0"},{"type":"arrow","id":"a01","x":180,"y":134,"width":0,"height":56,"points":[[0,0],[0,56]],"endArrowhead":"arrow"},{"type":"rectangle","id":"p1","x":40,"y":190,"width":280,"height":64,"roundness":{"type":3},"backgroundColor":"#d0bfff","fillStyle":"solid","strokeColor":"#8b5cf6","boundElements":[{"type":"text","id":"tp1"}]},{"type":"text","id":"tp1","x":50,"y":202,"width":260,"height":40,"text":"09:37 Research fan-out\n(4 parallel subagents)","fontSize":16,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"p1"},{"type":"rectangle","id":"s1","x":420,"y":140,"width":230,"height":46,"roundness":{"type":3},"backgroundColor":"#e5dbff","fillStyle":"solid","strokeColor":"#8b5cf6","boundElements":[{"type":"text","id":"ts1"}]},{"type":"text","id":"ts1","x":435,"y":153,"width":200,"height":20,"text":"agent-browser MCP","fontSize":16,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"s1"},{"type":"arrow","id":"as1","x":320,"y":215,"width":100,"height":-52,"points":[[0,0],[100,-52]],"endArrowhead":"arrow","strokeColor":"#8b5cf6"},{"type":"rectangle","id":"s2","x":420,"y":196,"width":230,"height":46,"roundness":{"type":3},"backgroundColor":"#e5dbff","fillStyle":"solid","strokeColor":"#8b5cf6","boundElements":[{"type":"text","id":"ts2"}]},{"type":"text","id":"ts2","x":435,"y":209,"width":200,"height":20,"text":"skills / SKILL.md format","fontSize":16,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"s2"},{"type":"arrow","id":"as2","x":320,"y":220,"width":100,"height":-1,"points":[[0,0],[100,-1]],"endArrowhead":"arrow","strokeColor":"#8b5cf6"},{"type":"rectangle","id":"s3","x":420,"y":252,"width":230,"height":46,"roundness":{"type":3},"backgroundColor":"#e5dbff","fillStyle":"solid","strokeColor":"#8b5cf6","boundElements":[{"type":"text","id":"ts3"}]},{"type":"text","id":"ts3","x":435,"y":265,"width":200,"height":20,"text":"a11y test primitives","fontSize":16,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"s3"},{"type":"arrow","id":"as3","x":320,"y":228,"width":100,"height":47,"points":[[0,0],[100,47]],"endArrowhead":"arrow","strokeColor":"#8b5cf6"},{"type":"rectangle","id":"s4","x":420,"y":308,"width":230,"height":46,"roundness":{"type":3},"backgroundColor":"#e5dbff","fillStyle":"solid","strokeColor":"#8b5cf6","boundElements":[{"type":"text","id":"ts4"}]},{"type":"text","id":"ts4","x":435,"y":321,"width":200,"height":20,"text":"sandbox options (+6 kids)","fontSize":16,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"s4"},{"type":"arrow","id":"as4","x":320,"y":236,"width":100,"height":95,"points":[[0,0],[100,95]],"endArrowhead":"arrow","strokeColor":"#8b5cf6"},{"type":"rectangle","id":"c1","x":720,"y":150,"width":190,"height":34,"roundness":{"type":3},"backgroundColor":"#f8f9fa","fillStyle":"solid","strokeColor":"#757575","boundElements":[{"type":"text","id":"tc1"}]},{"type":"text","id":"tc1","x":730,"y":158,"width":170,"height":18,"text":"Browserbase/less","fontSize":14,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"c1"},{"type":"rectangle","id":"c2","x":720,"y":192,"width":190,"height":34,"roundness":{"type":3},"backgroundColor":"#f8f9fa","fillStyle":"solid","strokeColor":"#757575","boundElements":[{"type":"text","id":"tc2"}]},{"type":"text","id":"tc2","x":730,"y":200,"width":170,"height":18,"text":"Modal","fontSize":14,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"c2"},{"type":"rectangle","id":"c3","x":720,"y":234,"width":190,"height":34,"roundness":{"type":3},"backgroundColor":"#f8f9fa","fillStyle":"solid","strokeColor":"#757575","boundElements":[{"type":"text","id":"tc3"}]},{"type":"text","id":"tc3","x":730,"y":242,"width":170,"height":18,"text":"Vercel Sandbox","fontSize":14,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"c3"},{"type":"rectangle","id":"c4","x":720,"y":276,"width":190,"height":34,"roundness":{"type":3},"backgroundColor":"#f8f9fa","fillStyle":"solid","strokeColor":"#757575","boundElements":[{"type":"text","id":"tc4"}]},{"type":"text","id":"tc4","x":730,"y":284,"width":170,"height":18,"text":"E2B","fontSize":14,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"c4"},{"type":"rectangle","id":"c5","x":720,"y":318,"width":190,"height":34,"roundness":{"type":3},"backgroundColor":"#f8f9fa","fillStyle":"solid","strokeColor":"#757575","boundElements":[{"type":"text","id":"tc5"}]},{"type":"text","id":"tc5","x":730,"y":326,"width":170,"height":18,"text":"Daytona","fontSize":14,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"c5"},{"type":"rectangle","id":"c6","x":720,"y":360,"width":190,"height":34,"roundness":{"type":3},"backgroundColor":"#f8f9fa","fillStyle":"solid","strokeColor":"#757575","boundElements":[{"type":"text","id":"tc6"}]},{"type":"text","id":"tc6","x":730,"y":368,"width":170,"height":18,"text":"local Docker","fontSize":14,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"c6"},{"type":"arrow","id":"ac1","x":650,"y":325,"width":70,"height":-155,"points":[[0,0],[70,-155]],"endArrowhead":"arrow","strokeColor":"#b0b0b0","strokeWidth":1},{"type":"arrow","id":"ac2","x":650,"y":328,"width":70,"height":-116,"points":[[0,0],[70,-116]],"endArrowhead":"arrow","strokeColor":"#b0b0b0","strokeWidth":1},{"type":"arrow","id":"ac3","x":650,"y":331,"width":70,"height":-78,"points":[[0,0],[70,-78]],"endArrowhead":"arrow","strokeColor":"#b0b0b0","strokeWidth":1},{"type":"arrow","id":"ac4","x":650,"y":334,"width":70,"height":-40,"points":[[0,0],[70,-40]],"endArrowhead":"arrow","strokeColor":"#b0b0b0","strokeWidth":1},{"type":"arrow","id":"ac5","x":650,"y":337,"width":70,"height":0,"points":[[0,0],[70,0]],"endArrowhead":"arrow","strokeColor":"#b0b0b0","strokeWidth":1},{"type":"arrow","id":"ac6","x":650,"y":340,"width":70,"height":37,"points":[[0,0],[70,37]],"endArrowhead":"arrow","strokeColor":"#b0b0b0","strokeWidth":1},{"type":"rectangle","id":"dec1","x":700,"y":412,"width":250,"height":66,"roundness":{"type":3},"backgroundColor":"#fff3bf","fillStyle":"solid","strokeColor":"#f59e0b","boundElements":[{"type":"text","id":"tdec1"}]},{"type":"text","id":"tdec1","x":710,"y":419,"width":230,"height":52,"text":"Decision: local agent-browser,\nno sandbox \u2014 autoconnect\nallows logged-in audits","fontSize":14,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"dec1"},{"type":"arrow","id":"a12","x":180,"y":254,"width":0,"height":96,"points":[[0,0],[0,96]],"endArrowhead":"arrow"},{"type":"rectangle","id":"p2","x":40,"y":350,"width":280,"height":78,"roundness":{"type":3},"backgroundColor":"#a5d8ff","fillStyle":"solid","strokeColor":"#4a9eed","boundElements":[{"type":"text","id":"tp2"}]},{"type":"text","id":"tp2","x":50,"y":361,"width":260,"height":56,"text":"10:02-10:30 Build\nbrowser.py bridge + Tavily Map\n+ SKILL.md workflow (5 commits)","fontSize":15,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"p2"},{"type":"arrow","id":"a23","x":180,"y":428,"width":0,"height":42,"points":[[0,0],[0,42]],"endArrowhead":"arrow"},{"type":"rectangle","id":"p3","x":40,"y":470,"width":280,"height":78,"roundness":{"type":3},"backgroundColor":"#ffd8a8","fillStyle":"solid","strokeColor":"#f59e0b","boundElements":[{"type":"text","id":"tp3"}]},{"type":"text","id":"tp3","x":50,"y":481,"width":260,"height":56,"text":"10:44-11:11 Harden\nenv forwarding, session-leak fix,\npackaged skills, --auto-connect","fontSize":15,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"p3"},{"type":"rectangle","id":"codex","x":420,"y":470,"width":230,"height":56,"roundness":{"type":3},"backgroundColor":"#d0bfff","fillStyle":"solid","strokeColor":"#8b5cf6","boundElements":[{"type":"text","id":"tcodex"}]},{"type":"text","id":"tcodex","x":430,"y":479,"width":210,"height":38,"text":"Codex review subagent\n(10:48) found the leak","fontSize":15,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"codex"},{"type":"arrow","id":"acdx","x":420,"y":498,"width":-100,"height":11,"points":[[0,0],[-100,11]],"endArrowhead":"arrow","strokeColor":"#8b5cf6"},{"type":"rectangle","id":"probes","x":420,"y":548,"width":280,"height":64,"roundness":{"type":3},"backgroundColor":"#c3fae8","fillStyle":"solid","strokeColor":"#06b6d4","boundElements":[{"type":"text","id":"tprobes"}]},{"type":"text","id":"tprobes","x":430,"y":562,"width":260,"height":36,"text":"6 throwaway probe scripts:\npagination, leak, screenshot dir, file://","fontSize":14,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"probes"},{"type":"arrow","id":"aprb","x":420,"y":570,"width":-100,"height":-30,"points":[[0,0],[-100,-30]],"endArrowhead":"arrow","strokeColor":"#06b6d4","strokeStyle":"dashed"},{"type":"arrow","id":"a34","x":180,"y":548,"width":0,"height":82,"points":[[0,0],[0,82]],"endArrowhead":"arrow"},{"type":"rectangle","id":"p4","x":40,"y":630,"width":280,"height":78,"roundness":{"type":3},"backgroundColor":"#a5d8ff","fillStyle":"solid","strokeColor":"#4a9eed","boundElements":[{"type":"text","id":"tp4"}]},{"type":"text","id":"tp4","x":50,"y":641,"width":260,"height":56,"text":"12:48-13:32 Report artifact\nminimal save_report tool\n(writes only report.md)","fontSize":15,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"p4"},{"type":"rectangle","id":"aband","x":420,"y":642,"width":250,"height":56,"roundness":{"type":3},"backgroundColor":"#ffc9c9","fillStyle":"solid","strokeColor":"#ef4444","boundElements":[{"type":"text","id":"taband"}]},{"type":"text","id":"taband","x":430,"y":651,"width":230,"height":38,"text":"generic fs-tools draft\nABANDONED (injection risk)","fontSize":15,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"aband"},{"type":"arrow","id":"aab","x":420,"y":670,"width":-100,"height":-1,"points":[[0,0],[-100,-1]],"endArrowhead":"arrow","strokeColor":"#ef4444","strokeStyle":"dashed"},{"type":"arrow","id":"a45","x":180,"y":708,"width":0,"height":52,"points":[[0,0],[0,52]],"endArrowhead":"arrow"},{"type":"rectangle","id":"p5","x":40,"y":760,"width":280,"height":72,"roundness":{"type":3},"backgroundColor":"#b2f2bb","fillStyle":"solid","strokeColor":"#22c55e","boundElements":[{"type":"text","id":"tp5"}]},{"type":"text","id":"tp5","x":50,"y":776,"width":260,"height":40,"text":"14:01-14:09 Audit run\napp.tavily.com/home (logged in)","fontSize":16,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"p5"},{"type":"arrow","id":"ares","x":320,"y":796,"width":100,"height":0,"points":[[0,0],[100,0]],"endArrowhead":"arrow","strokeColor":"#22c55e"},{"type":"rectangle","id":"results","x":420,"y":760,"width":300,"height":72,"roundness":{"type":3},"backgroundColor":"#b2f2bb","fillStyle":"solid","strokeColor":"#22c55e","boundElements":[{"type":"text","id":"tresults"}]},{"type":"text","id":"tresults","x":430,"y":770,"width":280,"height":52,"text":"9 screenshots (desktop/tablet/mobile)\nreport.md with 4 findings\nincl. real mobile bug @ 375px","fontSize":14,"fontFamily":1,"textAlign":"center","verticalAlign":"middle","containerId":"results"}]}</script>
+<script type="module">
+  try {
+    window.EXCALIDRAW_ASSET_PATH = "https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/";
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/index.css';
+    document.head.appendChild(css);
+    const [React, { createRoot }, ExcalidrawLib] = await Promise.all([
+      import('https://esm.sh/react@19'),
+      import('https://esm.sh/react-dom@19/client'),
+      import('https://esm.sh/@excalidraw/excalidraw@0.18.0?deps=react@19,react-dom@19'),
+    ]);
+    const scene = JSON.parse(document.getElementById('scene-data').textContent);
+    const mount = document.getElementById('excal');
+    mount.innerHTML = '';
+    createRoot(mount).render(
+      React.createElement(ExcalidrawLib.Excalidraw, {
+        initialData: { elements: scene.elements, appState: { viewBackgroundColor: '#ffffff' }, scrollToContent: true },
+        viewModeEnabled: true,
+        excalidrawAPI: (api) => setTimeout(() => {
+          try { api.scrollToContent(api.getSceneElements(), { fitToViewport: true, viewportZoomFactor: 0.9 }); }
+          catch (e) { console.warn('zoom-to-fit failed', e); }
+        }, 300),
+      })
+    );
+  } catch (e) {
+    console.warn('Excalidraw embed failed, keeping SVG fallback', e);
+  }
+</script>
+
+<h3 id="research">Research fan-out</h3>
+<p>Before writing the bridge, four research subagents ran in parallel; the sandbox coordinator spawned six more, one per provider. The conclusion was to <em>not</em> use any of them:</p>
+<table>
+  <tr><th>Track</th><th>What it fed into</th></tr>
+  <tr><td>agent-browser MCP</td><td>The <code>browser.py</code> bridge: 152 tools over stdio, <code>a11y</code> (axe-core) only in ≥0.33.0 → version preflight</td></tr>
+  <tr><td>Skills / SKILL.md loading</td><td><code>skills.py</code> — progressive disclosure modeled on Claude Code's skills format (docs fetch survives as a saved tool result)</td></tr>
+  <tr><td>a11y testing primitives</td><td>axe-core via the browser's <code>a11y</code> tool; <code>get_box</code> for measured layout evidence</td></tr>
+  <tr><td>Sandboxes: Browserbase/Browserless, Modal, Vercel Sandbox, E2B, Daytona, Docker</td><td><strong>Rejected.</strong> Local agent-browser is simpler, has no extra account surface, and autoconnect to the user's real browser enables logged-in audits — which the final run needed</td></tr>
+</table>
+
+<h2 id="plan">The plan (verbatim)</h2>
+<div class="chips"><span class="chip">~/.claude/file-history/3f11…/8ebc0697@v2 <span class="ln">snapshot 10:25</span></span></div>
+<p>Written before the build phase and recovered from the session's file-history snapshots, untouched. The "Decisions (confirmed)" and "Verification (drive the CLI)" sections are the contract the commits then followed. One decision documented here was later reversed deliberately: "no saved-report machinery" became the <code>save_report</code> tool once a durable artifact mattered.</p>
+<div class="preview plan" data-title="Plan: Give the agent a browser (agent-browser) + site discovery (Tavily Map)">
+<div class="preview-head"><svg class="doc-ico" viewBox="0 0 24 24" style="color:#d97757" fill="currentColor"><path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.583.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312z"/></svg>Plan: Give the agent a browser + site discovery<span class="sub">file-history snapshot · 10:25</span></div>
+<div class="preview-body">
+<script type="text/markdown">
+## Context
+
+`a11y-agent` is currently a small streaming research agent: one prompt-driven CLI command (`main` in `src/a11y_agent/cli.py`) builds a LangChain agent (`build_agent` in `src/a11y_agent/agent.py`) with a single `TavilySearch` tool and streams the run via `StreamRenderer` (`src/a11y_agent/rendering.py`).
+
+We want it to actually verify web pages — accessibility, layout, mobile-friendliness, screenshots, network — without changing the agent's shape. The approach: **keep one prompt-driven agent and just hand it more tools.** Driven by natural language like _"take a look at example.com/pricing and show me some accessibility issues"_, the agent chooses tools itself: **Tavily** to search/discover pages and **agent-browser** (a Rust CLI exposing a real headless Chromium over MCP) to open, snapshot, screenshot, run axe-core (`a11y`), measure element boxes, emulate devices, and inspect network.
+
+Verified this session: agent-browser **0.33.0** is installed; `agent-browser mcp --tools all` exposes **152 tools across 3 paginated pages**, including `agent_browser_a11y` (axe-core), `screenshot` (returns the image as a base64 block so Kimi K2.6's vision sees it), `get_box`, `set_device`, `vitals`, and network tools. The `a11y` tool only exists in 0.33.0+, which motivates a version preflight.
+
+## Model
+
+Keep **Kimi K2.6** (`DEFAULT_MODEL`) — it is vision-capable, so one model handles both orchestration and looking at screenshots. No separate vision model.
+
+## Decisions (confirmed)
+
+- Tools: **Tavily Search + Map** + agent-browser `--tools all`.
+- CLI: **single prompt-driven command**, no `audit` subcommand.
+- Report: whatever the agent streams to the terminal (no saved-report machinery).
+
+## Key files
+
+| File | Change |
+| --- | --- |
+| `pyproject.toml`, `main.py` | add `langchain-mcp-adapters` dependency (both dep lists) |
+| `src/a11y_agent/browser.py` | **new** — agent-browser preflight + MCP tool loader |
+| `src/a11y_agent/agent.py` | `build_agent(tools, model)` takes injected tools; broaden `SYSTEM_PROMPT`; add `TavilyMap` |
+| `src/a11y_agent/rendering.py` | add async `arender` (MCP tools are async → run via `astream`) |
+| `src/a11y_agent/cli.py` | preflight agent-browser; load browser tools in a context; run under `asyncio.run` |
+
+## Reused utilities (don't re-implement)
+
+- `StreamRenderer` (`rendering.py`) — the whole tool-call/result/text rendering loop; only add an async entry point that reuses `_render_event`/`_finish`.
+- `require_env` + `REQUIRED_ENV` (`cli.py`) — the "missing dependency → hint → exit" pattern; mirror it for the agent-browser binary check.
+- `resolve_model` (`agent.py`) — model precedence (arg > `A11Y_AGENT_MODEL` > default).
+- `load_dotenv` + `Panel`/`console.rule` framing in `cli.py` — keep as-is.
+
+## Implementation (a few commits, drive the CLI between them)
+
+### Commit 1 — agent-browser MCP bridge + preflight
+
+- Add `langchain-mcp-adapters` to `pyproject.toml` and the `main.py` inline deps.
+- New `src/a11y_agent/browser.py`:
+  - `check_agent_browser() -> str | None` — pure check (no typer coupling): return an error/hint string, or `None` if OK.
+    - binary present via `shutil.which("agent-browser")`; if missing, hint `npm install -g agent-browser` / `brew install agent-browser` / `cargo install agent-browser`.
+    - version via `subprocess.run(["agent-browser","--version"])`, parse and require **>= 0.33.0** (needed for the `a11y` tool); else hint `npm install -g agent-browser@latest`.
+  - `@asynccontextmanager browser_tools(profile="all")` — start `agent-browser mcp --tools <profile>` over stdio (`mcp.client.stdio.stdio_client` + `ClientSession`), `session.initialize()`, then `load_mcp_tools(session)` from `langchain_mcp_adapters.tools`; `yield` the tools. One persistent session so the stateful browser (navigation, viewport, cookies) survives across tool calls.
+- **Pagination guard:** after loading, assert the tool list actually contains `agent_browser_a11y` (it lives past page 1). `load_mcp_tools` paginates in recent versions; if `a11y` is absent, that's the signal the adapter didn't follow `nextCursor` and we handle it (manual pagination) rather than shipping a silent gap.
+
+### Commit 2 — wire browser tools into the agent + async CLI + broadened prompt
+
+- `agent.py`:
+  - `build_agent(tools: list, model: str | None = None)` — accept the full toolset (Tavily + browser) instead of hardcoding `[TavilySearch()]`. Keep `resolve_model`.
+  - Rewrite `SYSTEM_PROMPT`: a web QA / accessibility assistant that can **search the web** and **drive a real browser** to open pages, take accessibility snapshots and screenshots, run the `a11y` (axe-core) audit, confirm suspected layout problems with `get_box`/computed styles (overflow / overlap / tap targets < 44×44px), emulate devices for mobile checks, and inspect network/vitals. Guidance: look at screenshots, prefer measured evidence over guessing, report issues grouped by severity with a selector/region and a suggested fix.
+- `rendering.py`: add `async def arender(self, stream)` that does `async for mode, data in stream: self._render_event(...)` then `self._finish()`. Refactor the existing sync `render` to share `_render_event`/`_finish` (small extract, no behavior change).
+- `cli.py`:
+  - Add `require_agent_browser()` mirroring `require_env`: call `check_agent_browser()`, print the hint + `raise typer.Exit(1)` on error.
+  - `main` stays a single prompt command. Body becomes: `load_dotenv()` → `require_env()` → `require_agent_browser()` → print framing → `asyncio.run(_run(question_text, model))`.
+  - `_run`: `async with browser_tools() as browser: tools = [TavilySearch(), TavilyMap()] + browser;` `agent = build_agent(tools, model)`; `stream = agent.astream({...}, stream_mode=["messages","updates"])`; `await StreamRenderer(console).arender(stream)`. Keep the KeyboardInterrupt / Exception handling currently in `main`.
+
+### Commit 3 — Tavily Map for site discovery + prompt polish
+
+- Ensure `TavilyMap` is imported from `langchain_tavily` and included in the toolset (may already be added in Commit 2 — if so, this commit is prompt-only).
+- Extend `SYSTEM_PROMPT` with a discovery hint: when asked to look at "a site" or multiple pages, use `TavilyMap` to enumerate URLs, then audit representative pages with the browser tools.
+
+## Notes / tradeoffs
+
+- **152 tools** is a large surface for the model. We default to `all` per the user's call; if tool-selection quality suffers, trim to composed profiles (`core,network,debug,react,mobile`) later — no architectural change, just the `profile` arg to `browser_tools`.
+- The browser MCP server (and Chrome) starts on every run. The agent simply won't call browser tools when the prompt doesn't need them. Acceptable startup cost for now.
+- If Chrome-for-Testing isn't installed, browser launch errors surface at first tool use — map that to a hint to run `agent-browser install` (lazy, not a preflight).
+
+## Verification (drive the CLI)
+
+After **Commit 1**: `uv run main.py --help` still works; add a one-off smoke that the MCP session loads and `agent_browser_a11y` is in the tool list (temporary print or a tiny script) — confirms pagination.
+
+After **Commit 2** (needs `NEBIUS_API_KEY`, `TAVILY_API_KEY`, network):
+
+```
+uv run main.py "open https://example.com, take a screenshot, and list any accessibility issues"
+```
+
+Expect tool calls to `agent_browser_open` / `screenshot` / `a11y` streamed in the panels, then a severity-grouped report. Try `--model` override and a bad prompt to confirm error handling.
+
+After **Commit 3**:
+
+```
+uv run main.py "look at example.com and a couple of its pages and show me example issues"
+```
+
+Expect a `TavilyMap` call to enumerate URLs, then browser audits on a few pages.
+
+Missing-dependency checks to eyeball: unset `NEBIUS_API_KEY` → env hint; rename the `agent-browser` binary on PATH → install hint (don't actually uninstall — just reason through `check_agent_browser`).
+</script>
+</div>
+<div class="preview-fade"></div>
+<button class="expand-btn">Show full plan</button>
+</div>
+
+<h2 id="codex">Codex review (verbatim)</h2>
+<div class="chips"><span class="chip">~/.codex/sessions/2026/07/24/rollout-…10-48-58….jsonl <span class="ln">recovered</span></span></div>
+<p>At 10:48, while I was testing the agent after the first seven commits, I had Opus dispatch a Codex (GPT-5.6-Sol) code review of the work so far — a deliberate second pair of eyes from a different model family running in parallel with my testing. Its output below is verbatim from Codex's own session log (<code>~/.codex/sessions</code>), with local absolute paths shortened to repo-relative ones. Findings marked ✅ were fixed in commit <code>3b68340</code> (11:05) and the packaging/report work that followed; the High prompt-injection finding is why <code>save_report</code> ended up so deliberately small.</p>
+
+<table>
+  <tr><th>Finding</th><th>Severity</th><th>Response</th></tr>
+  <tr><td>152 tools incl. destructive ones exposed to prompt-injection from audited pages</td><td><span class="badge high">High</span></td><td>✅ Accepted as the core threat model — drove the minimal <code>save_report</code> design (agent can write exactly one file); documented tradeoff for <code>--tools all</code></td></tr>
+  <tr><td>Wheel installs ship without the root <code>skills/</code> directory</td><td><span class="badge high">High</span></td><td>✅ Skills moved into the package as <code>builtin_skills/</code> (commit <code>3b68340</code>)</td></tr>
+  <tr><td><code>langchain-tavily>=0.2.0</code> allows versions without <code>TavilyMap</code></td><td><span class="badge high">High</span></td><td>✅ Dependency floors raised (commit <code>3b68340</code>)</td></tr>
+  <tr><td>No read timeout / deadline on the MCP session</td><td><span class="badge med">Medium</span></td><td>Known gap, accepted for a 4–6h scope</td></tr>
+  <tr><td>Context exit never closes agent-browser's persistent daemon/Chromium</td><td><span class="badge med">Medium</span></td><td>✅ Session-leak fix, verified by a differential probe (commit <code>3b68340</code>)</td></tr>
+  <tr><td>Version preflight runs with full env incl. API keys</td><td><span class="badge med">Medium</span></td><td>✅ Addressed alongside <code>AGENT_BROWSER_*</code> env-forwarding work</td></tr>
+  <tr><td><code>langchain-mcp-adapters==0.1.0</code> permitted but can't paginate</td><td><span class="badge med">Medium</span></td><td>✅ Floor bumped to <code>>=0.3.0</code> (commit <code>3b68340</code>)</td></tr>
+  <tr><td>Sentinel check assumes <code>all</code>-profile tool for any profile</td><td><span class="badge low">Low</span></td><td>✅ Sentinel gating fixed (commit <code>3b68340</code>)</td></tr>
+</table>
+
+<div class="preview" data-title="Codex review of recent work (verbatim)">
+<div class="preview-head"><svg class="doc-ico" viewBox="0 0 24 24" style="color:#1a1a1a" fill="currentColor"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>Codex review of recent work<span class="sub">codex session · 10:48</span></div>
+<div class="preview-body">
+<script type="text/markdown">
+No Critical findings.
+
+### High
+
+- **Robustness/security — `browser.py:34`, `cli.py:85`** — The model receives all 152 browser tools, including auth/state deletion, clipboard, plugins, installation, upgrades, and arbitrary evaluation, without an audit-specific policy or approval layer. **Scenario:** prompt-injection text on an audited page directs an authenticated autoconnect session to read sensitive state or execute destructive tools and exfiltrate results through navigation or Tavily.
+
+- **Packaging/portability — `skills.py:22`, `pyproject.toml:24`** — The default path assumes a source checkout, while the wheel includes only `src/a11y_agent` and omits the root `skills/` directory. **Scenario:** a wheel or pipx installation silently loads no accessibility skill and runs audits using only the generic prompt.
+
+- **Packaging/portability — `pyproject.toml:10`, `cli.py:11`** — The package allows `langchain-tavily>=0.2.0`, but releases before 0.2.4 do not export the unconditionally imported `TavilyMap`. **Scenario:** a valid dependency resolution to 0.2.0–0.2.3 crashes both entrypoints at import time.
+
+### Medium
+
+- **Robustness — `browser.py:118`** — `ClientSession` has no read timeout, and there is no encompassing deadline around initialization, pagination, or tool calls. **Scenario:** an MCP server that remains alive but stops responding leaves the CLI pending indefinitely.
+
+- **Correctness/lifecycle — `browser.py:110`, `browser.py:117`** — Context exit reliably terminates the MCP stdio process tree, but it never closes agent-browser's separate persistent daemon/browser despite claiming the browser is torn down. **Scenario:** success, tool failure, or Ctrl-C leaves Chromium, cookies, and the last page alive for reuse by later runs.
+
+- **Environment safety — `cli.py:61`, `browser.py:78`** — After `.env` loads the API keys, the version preflight runs `agent-browser` with the complete inherited environment rather than `_server_env()`'s reduced environment. **Scenario:** a compromised or PATH-hijacked executable receives `NEBIUS_API_KEY` and `TAVILY_API_KEY` merely from the preflight invocation.
+
+- **Packaging/tool contract — `pyproject.toml:8`, `browser.py:120`** — The permitted `langchain-mcp-adapters==0.1.0` does not paginate tool discovery, although the application requires later pages. **Scenario:** a metadata-valid constrained installation starts MCP successfully, then every run aborts at the missing-sentinel check.
+
+### Low
+
+- **Correctness — `browser.py:102`, `browser.py:123`** — `browser_tools()` accepts any profile but always requires an `all`/`debug`-profile tool. **Scenario:** `browser_tools("core")` loads a valid profile and then falsely reports a pagination failure.
+</script>
+</div>
+<div class="preview-fade"></div>
+<button class="expand-btn">Show full review</button>
+</div>
+
+<h2 id="probes">Verification probes</h2>
+<p>Every risky assumption got a throwaway probe script before (or right after) the code that depended on it. All six survive as file-history snapshots — none were committed, by design.</p>
+<table>
+  <tr><th>Time</th><th>Probe</th><th>Assumption it tested</th></tr>
+  <tr><td>10:25</td><td>MCP preflight / pagination smoke test</td><td>The bridge follows <code>nextCursor</code> across 3 paginated tool pages and <code>agent_browser_a11y</code> actually loads</td></tr>
+  <tr><td>10:44</td><td>Skills loading</td><td><code>load_skills</code> / <code>render_listing</code> / <code>build_load_skill_tool</code> behave with the new SKILL.md</td></tr>
+  <tr><td>11:06</td><td>Session-close differential test</td><td>The Codex-flagged leak is really fixed: <code>browser_tools</code> exit closes the browser session</td></tr>
+  <tr><td>13:10</td><td>Screenshot path / eval-fs write</td><td>Where agent-browser actually lands screenshots and eval writes</td></tr>
+  <tr><td>13:10</td><td>Daemon cwd + <code>AGENT_BROWSER_SCREENSHOT_DIR</code></td><td>The env var reliably redirects screenshots into the run's output dir</td></tr>
+  <tr><td>13:18</td><td><code>file://</code> HTML report render</td><td>A report can reference screenshots by bare filename and still render</td></tr>
+</table>
+
+<h2 id="report">Saving the report</h2>
+<p>The plan originally said "no saved-report machinery" — the audit would just stream to the terminal. Once a durable artifact mattered, the question became <em>how much filesystem access the agent should get</em>. I drafted both options before deciding (the abandoned draft survives as a 13:18 file-history snapshot):</p>
+
+<table>
+  <tr><th></th><th>General <code>read</code> / <code>edit</code> / <code>write</code> tools</th><th>Single <code>save_report</code> tool (shipped)</th></tr>
+  <tr><td>Capability</td><td>Agent can read files back, iterate on drafts, manage multiple artifacts — confined to allowed roots</td><td>Writes exactly one file: <code>report.md</code> into the run's output dir. No path argument at all</td></tr>
+  <tr><td>Blast radius</td><td>This agent reads <strong>untrusted web pages</strong>. Codex's High finding: prompt-injection on an audited page could steer any write-capable tool. Path confinement helps, but it's more code to get right</td><td>A malicious page can at worst overwrite the report. Nothing else is reachable</td></tr>
+  <tr><td>Scope fit</td><td>More surface to build, test, and harden inside a 4–6h take-home</td><td>31 lines (<code>report.py</code>), trivially reviewable</td></tr>
+</table>
+
+<p>For the scope of this project the blast radius wasn't worth it — the simple tool won. Screenshots don't need a write tool at all: <code>AGENT_BROWSER_SCREENSHOT_DIR</code> redirects them into the same output dir (verified by the 13:10 probes), and the report references them by bare filename. The SKILL.md's Output section tells the agent to finish every audit with <code>save_report</code>.</p>
+
+<h2 id="commits">Commits</h2>
+<p>Eleven commits across the session, each one small enough to verify by driving the CLI between them.</p>
+<table>
+  <tr><th>Time</th><th>Hash</th><th>Message</th></tr>
+  <tr><td>09:25</td><td><code>06f19be</code></td><td>organize starter agent into src package with cli, agent, and rendering modules</td></tr>
+  <tr><td>09:26</td><td><code>14f0731</code></td><td>move model and system prompt into agent, drop config.py, support A11Y_AGENT_MODEL env</td></tr>
+  <tr><td>10:18</td><td><code>ed913dd</code></td><td>add agent-browser mcp bridge with preflight and pagination guard</td></tr>
+  <tr><td>10:20</td><td><code>6c7f72c</code></td><td>wire agent-browser tools into a browser-driving audit agent over async cli</td></tr>
+  <tr><td>10:21</td><td><code>f36796f</code></td><td>add tavily map tool and site-discovery guidance for multi-page audits</td></tr>
+  <tr><td>10:22</td><td><code>d2823ab</code></td><td>update readme and description for the accessibility auditing agent</td></tr>
+  <tr><td>10:30</td><td><code>df567c1</code></td><td>move accessibility workflow into a loadable skill, generalize the agent</td></tr>
+  <tr><td>10:47</td><td><code>d4fc30d</code></td><td>forward AGENT_BROWSER_* env to mcp subprocess and document autoconnect for logged-in pages</td></tr>
+  <tr><td>11:05</td><td><code>3b68340</code></td><td>fix browser session leak and sentinel gating, bump mcp-adapters floor, package built-in skills, and add --auto-connect flag</td></tr>
+  <tr><td>13:31</td><td><code>42cf928</code></td><td>add save_report tool and results output dir for a durable markdown audit artifact</td></tr>
+  <tr><td>13:32</td><td><code>4b95ec5</code></td><td>condense accessibility skill body from 475 to 281 tokens</td></tr>
+</table>
+
+<h2 id="artifacts">Surviving artifacts</h2>
+<table>
+  <tr><th>Artifact</th><th>Count</th><th>What it proves</th></tr>
+  <tr><td>Subagent metadata records</td><td>12</td><td>The research fan-out (4 tracks + 6 sandbox children) and the Codex review actually ran, with timestamps</td></tr>
+  <tr><td>Codex session log (<code>~/.codex/sessions</code>)</td><td>1 review</td><td>The full independent review text, verbatim — recovered from Codex's own storage after the Claude transcript was lost</td></tr>
+  <tr><td>File-history snapshots</td><td>~73 across 24 files</td><td>Per-file edit timelines: the plan doc, all six probe scripts, and the abandoned fs-tools draft survive here</td></tr>
+  <tr><td>Saved tool result</td><td>1 (72 KB)</td><td>The Claude Code skills documentation fetch that shaped <code>skills.py</code>'s progressive-disclosure design</td></tr>
+  <tr><td>Git commits</td><td>11</td><td>The incremental build, small verifiable steps with honest messages</td></tr>
+  <tr><td>Audit output (<code>results/</code>)</td><td>report + 9 PNGs</td><td>The agent works, end to end, on a real logged-in product</td></tr>
+</table>
+
+<p style="color: var(--muted); font-size: 13.5px; margin-top: 40px;">Built by Caleb Fahlgren for the Tavily FDE take-home, 2026-07-24. This page was itself assembled with a coding agent from the surviving artifacts above.</p>
+
+</main>
+</div>
+
+<div class="modal-overlay" id="modal" hidden>
+  <div class="modal">
+    <div class="modal-head"><span id="modal-title"></span><button class="modal-close" id="modal-close" aria-label="Close">&times;</button></div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+<script>
+  const modal = document.getElementById('modal');
+  const modalTitle = document.getElementById('modal-title');
+  const modalBody = document.getElementById('modal-body');
+  function closeModal() { modal.hidden = true; document.body.style.overflow = ''; }
+  document.querySelectorAll('.preview').forEach(card => {
+    card.addEventListener('click', () => {
+      modalTitle.textContent = card.dataset.title;
+      modalBody.innerHTML = card.querySelector('.preview-body').innerHTML;
+      modal.querySelector('.modal').classList.toggle('plan', card.classList.contains('plan'));
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+      modalBody.scrollTop = 0;
+    });
+  });
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.querySelectorAll('a[href="#context"]').forEach(a => a.addEventListener('click', () => { document.getElementById('context').open = true; }));
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+</script>
+</body>
+</html>

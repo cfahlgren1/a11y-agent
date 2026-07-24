@@ -21,6 +21,10 @@ Inspect a page with the browser tools and deliver a saved markdown report.
    guessing (overflow, overlap, tap targets < 44×44px).
 4. Emulate a phone (e.g. "iPhone 15"), re-screenshot (`<output_dir>/mobile.png`), recheck.
 
+Prefer viewport screenshots (scroll to see below the fold). Note: under viewport/device
+emulation, full-page screenshots come out zoomed out with blank white space to the right
+and bottom — that's a capture artifact, not a page layout bug; never report it as one.
+
 Report only issues backed by evidence: a selector, a measured box, an axe rule, or a
 failed request.
 

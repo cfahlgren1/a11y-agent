@@ -1,10 +1,23 @@
 # a11y-agent
 
-A streaming CLI agent that inspects and audits web pages for accessibility, layout,
-and mobile issues. Drive it with a prompt — it searches the web (Tavily) and drives a
-real headless Chromium ([agent-browser](https://github.com/vercel-labs/agent-browser))
-to open pages, run axe-core audits, take and *look at* screenshots, measure elements,
-emulate devices, and inspect the network, then streams a report to your terminal.
+A CLI agent that audits web pages for accessibility, layout, and mobile issues — driving real headless Chromium (agent-browser) and streaming its findings to your terminal.
+
+## Why?
+
+With agents everyone is writing orders of magnitude more software. Token usage is exploding. Yet the average software experience is still buggy, unreliable, and built without care. We should be spending just as many tokens making our software reliable, accessible, and polished as we do generating it. With agents, we suddenly have the bandwidth to test edge cases and ensure our product feels great on all platforms and devices.
+
+`a11y-agent` walks the floor of your product — testing features, spotting issues, and finding what needs polish. Below is a real accessibility audit of the Tavily Dashboard, with genuine findings. It also works on pages search engines can't reach — like authenticated dashboards — as requested in [tavily-python#163](https://github.com/tavily-ai/tavily-python/issues/163).
+
+## How I built this
+
+Unfortunately, due to a Claude Code behavior that [skips saving transcripts inside child
+sessions](https://code.claude.com/docs/en/settings#environment-variables) (an inherited
+`CLAUDE_CODE_CHILD_SESSION` env marker — silent until v2.1.217 added a warning), I lost
+the `.jsonl` transcript of the build session. However, I was able to reconstruct most of
+it from what did survive — subagent metadata, file-history snapshots, git commits, and an
+independent Codex review log — and turned it into a webpage:
+
+**→ [how-i-built-a11y-agent.vercel.app](https://how-i-built-a11y-agent.vercel.app/)**
 
 ## Setup
 
@@ -111,15 +124,21 @@ present in installed copies too). Add your own by pointing `A11Y_AGENT_SKILLS_DI
 directory of `<name>/SKILL.md` folders — those are merged in and override built-ins with
 the same name.
 
-## Layout
+## Example
+
+A real run against Tavily's logged-in dashboard, driven by this prompt (using
+[autoconnect](#auditing-logged-in-pages-autoconnect) so the agent sees the authenticated
+page):
 
 ```
-src/a11y_agent/
-├── agent.py        # model + general system prompt + builds the LangChain agent
-├── browser.py      # agent-browser preflight + loads its MCP tools + browser cleanup
-├── skills.py       # discover / parse SKILL.md files + the load_skill tool
-├── builtin_skills/ # packaged skills, e.g. accessibility-audit/SKILL.md
-├── rendering.py    # rich rendering of the streamed tool calls / results / text
-└── cli.py          # typer command, env/binary checks, wires the tools together
-main.py             # thin `uv run` entry point
+go to https://app.tavily.com/home with agent browser auto connect and look across
+different viewports and annotate / take screenshots of any weird layout issues and
+create a markdown file with images showing them. we only need a couple things. i care
+more about layout than a11y for this.
 ```
+
+The agent mapped the page across desktop/tablet/mobile viewports, screenshotted each,
+looked at the images, and saved a four-finding report — including the API Keys table
+silently dropping its KEY and OPTIONS columns at 375px.
+
+**→ Read the report: [`examples/tavily-home/report.md`](examples/tavily-home/report.md)**
