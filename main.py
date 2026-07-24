@@ -6,6 +6,7 @@
 #   "langchain-nebius>=0.1.0",
 #   "langchain-tavily>=0.2.0",
 #   "python-dotenv>=1.0.0",
+#   "python-frontmatter>=1.1.0",
 #   "rich>=13.0.0",
 #   "typer>=0.12.0",
 # ]

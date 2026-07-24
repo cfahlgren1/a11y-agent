@@ -55,12 +55,26 @@ uv run main.py --model "moonshotai/Kimi-K2.6" "..."
 
 Model resolution order: `--model` flag → `A11Y_AGENT_MODEL` env var → built-in default.
 
+## Skills
+
+The agent itself is general — search + drive a browser. Task-specific workflows live as
+**skills**: a `skills/<name>/SKILL.md` file with YAML frontmatter (`name`, `description`)
+and a markdown body. At startup the agent lists each skill's name + description in its
+prompt and, when a request matches, calls a `load_skill` tool to pull in the full
+instructions (progressive disclosure — bodies only cost tokens when used). This is the
+[SKILL.md](https://agentskills.io) open standard, so skills also work in Claude Code.
+
+Ships with `accessibility-audit`. Add your own by dropping a new folder under `skills/`;
+point elsewhere with `A11Y_AGENT_SKILLS_DIR`.
+
 ## Layout
 
 ```
+skills/accessibility-audit/SKILL.md   # the a11y audit workflow (a loadable skill)
 src/a11y_agent/
-├── agent.py       # model + system prompt + builds the LangChain agent
+├── agent.py       # model + general system prompt + builds the LangChain agent
 ├── browser.py     # agent-browser preflight + loads its MCP tools into LangChain
+├── skills.py      # discover / parse SKILL.md files + the load_skill tool
 ├── rendering.py   # rich rendering of the streamed tool calls / results / text
 └── cli.py         # typer command, env/binary checks, wires the tools together
 main.py            # thin `uv run` entry point

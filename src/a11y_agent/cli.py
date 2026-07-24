@@ -12,9 +12,10 @@ from langchain_tavily import TavilyMap, TavilySearch
 from rich.console import Console
 from rich.panel import Panel
 
-from .agent import build_agent
+from .agent import build_agent, compose_system_prompt
 from .browser import browser_tools, check_agent_browser
 from .rendering import StreamRenderer
+from .skills import build_load_skill_tool, load_skills, render_listing
 
 app = typer.Typer(add_completion=False)
 console = Console()
@@ -77,10 +78,15 @@ def main(
 
 
 async def _run(question_text: str, model: Optional[str]) -> None:
-    """Load browser tools over MCP, build the agent, and stream the run."""
+    """Load skills + browser tools, build the agent, and stream the run."""
+    skills = load_skills()
+    system_prompt = compose_system_prompt(render_listing(skills))
+
     async with browser_tools() as browser:
         tools = [TavilySearch(), TavilyMap(), *browser]
-        agent = build_agent(tools, model=model)
+        if skills:
+            tools.append(build_load_skill_tool(skills))
+        agent = build_agent(tools, model=model, system_prompt=system_prompt)
         stream = agent.astream(
             {"messages": [{"role": "user", "content": question_text}]},
             stream_mode=["messages", "updates"],
