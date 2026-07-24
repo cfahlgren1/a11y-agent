@@ -28,19 +28,20 @@ uv pip install -e .
 a11y-agent "What are the latest trends in agent evaluation?"
 ```
 
-Pick a different model with `--model`:
+Pick a different model with `--model`, or set `A11Y_AGENT_MODEL` in `.env`:
 
 ```sh
 uv run main.py --model "moonshotai/Kimi-K2.6" "..."
 ```
 
+Model resolution order: `--model` flag → `A11Y_AGENT_MODEL` env var → built-in default.
+
 ## Layout
 
 ```
 src/a11y_agent/
-├── config.py      # env validation, system prompt, default model
-├── agent.py       # builds the LangChain agent (Nebius model + Tavily tool)
+├── agent.py       # model + system prompt + builds the LangChain agent
 ├── rendering.py   # rich rendering of the streamed tool calls / results / text
-└── cli.py         # typer command that wires it all together
+└── cli.py         # typer command, env loading/validation, wires it together
 main.py            # thin `uv run` entry point
 ```
