@@ -79,6 +79,7 @@ def check_agent_browser() -> str | None:
         result = subprocess.run(
             ["agent-browser", "--version"],
             capture_output=True,
+            check=False,
             text=True,
             timeout=15,
         )
@@ -142,19 +143,18 @@ async def browser_tools(profile: str = DEFAULT_TOOL_PROFILE) -> AsyncIterator[li
         args=["mcp", "--tools", profile],
         env=_server_env(),
     )
-    async with stdio_client(server) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            tools = await load_mcp_tools(session)
+    async with stdio_client(server) as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+        tools = await load_mcp_tools(session)
 
-            names = {tool.name for tool in tools}
-            if _expects_sentinel(profile) and SENTINEL_TOOL not in names:
-                raise RuntimeError(
-                    f"agent-browser MCP loaded {len(tools)} tools but '{SENTINEL_TOOL}' "
-                    "is missing — the client likely did not follow tool-list pagination. "
-                    "Upgrade langchain-mcp-adapters so it pages through nextCursor."
-                )
-            try:
-                yield tools
-            finally:
-                await _close_browser(session)
+        names = {tool.name for tool in tools}
+        if _expects_sentinel(profile) and SENTINEL_TOOL not in names:
+            raise RuntimeError(
+                f"agent-browser MCP loaded {len(tools)} tools but '{SENTINEL_TOOL}' "
+                "is missing — the client likely did not follow tool-list pagination. "
+                "Upgrade langchain-mcp-adapters so it pages through nextCursor."
+            )
+        try:
+            yield tools
+        finally:
+            await _close_browser(session)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from dotenv import load_dotenv
@@ -55,8 +55,10 @@ def require_agent_browser() -> None:
 def main(
     question: Annotated[list[str], typer.Argument(help="What to look at / ask")],
     model: Annotated[
-        Optional[str],
-        typer.Option(help="Model name (defaults to A11Y_AGENT_MODEL env var, then a built-in default)"),
+        str | None,
+        typer.Option(
+            help="Model name (defaults to A11Y_AGENT_MODEL env var, then a built-in default)"
+        ),
     ] = None,
     auto_connect: Annotated[
         bool,
@@ -88,7 +90,7 @@ def main(
     except KeyboardInterrupt:
         console.print("\n[red]Interrupted.[/red]")
         raise typer.Exit(code=130) from None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - top-level CLI boundary
         console.print(f"\n[bold red]Agent run failed:[/bold red] {exc}")
         raise typer.Exit(code=1) from None
     finally:
@@ -108,7 +110,7 @@ def _prepare_output_dir() -> Path:
     return output_dir
 
 
-async def _run(question_text: str, model: Optional[str], output_dir: Path) -> None:
+async def _run(question_text: str, model: str | None, output_dir: Path) -> None:
     """Load skills + browser tools, build the agent, and stream the run."""
     skills = load_skills()
     output_note = (

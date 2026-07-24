@@ -43,6 +43,18 @@ turned it into a webpage:
 
    The CLI checks for it on startup and prints an install hint if it's missing or too old.
 
+## Development
+
+Install the locked development environment, then run Ruff's linter and formatter:
+
+```sh
+uv sync --locked --dev
+uv run ruff check .
+uv run ruff format .
+```
+
+To verify formatting without changing files, run `uv run ruff format --check .`.
+
 ## Run
 
 With [uv](https://docs.astral.sh/uv/) (no install step needed):
