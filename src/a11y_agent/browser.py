@@ -13,6 +13,7 @@ calls within one run.
 from __future__ import annotations
 
 import contextlib
+import os
 import re
 import shutil
 import subprocess
@@ -21,7 +22,7 @@ from typing import Any
 
 from langchain_mcp_adapters.tools import load_mcp_tools
 from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp.client.stdio import get_default_environment, stdio_client
 
 # The `a11y` (axe-core) MCP tool was introduced in this release; older binaries would
 # silently lack it, so we gate on it.
@@ -42,6 +43,19 @@ _INSTALL_HINT = (
     "  brew install agent-browser\n"
     "  cargo install agent-browser"
 )
+
+
+def _server_env() -> dict[str, str]:
+    """Environment for the MCP subprocess.
+
+    The MCP stdio client otherwise passes only a minimal safe env (PATH, HOME, ...),
+    which would drop agent-browser's own configuration. Forward every `AGENT_BROWSER_*`
+    variable so users can configure the browser — e.g. `AGENT_BROWSER_AUTO_CONNECT=1`
+    to reuse a logged-in Chrome — without us leaking unrelated secrets (API keys).
+    """
+    env = get_default_environment()
+    env.update({k: v for k, v in os.environ.items() if k.startswith("AGENT_BROWSER_")})
+    return env
 
 
 def _parse_version(text: str) -> tuple[int, ...] | None:
@@ -95,7 +109,11 @@ async def browser_tools(profile: str = DEFAULT_TOOL_PROFILE) -> AsyncIterator[li
 
     The subprocess and browser are torn down when the context exits.
     """
-    server = StdioServerParameters(command="agent-browser", args=["mcp", "--tools", profile])
+    server = StdioServerParameters(
+        command="agent-browser",
+        args=["mcp", "--tools", profile],
+        env=_server_env(),
+    )
     async with stdio_client(server) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()

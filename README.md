@@ -55,6 +55,33 @@ uv run main.py --model "moonshotai/Kimi-K2.6" "..."
 
 Model resolution order: `--model` flag → `A11Y_AGENT_MODEL` env var → built-in default.
 
+## Auditing logged-in pages (autoconnect)
+
+By default the agent launches a fresh, isolated Chromium — great for public pages, but it
+has none of your cookies. To audit pages behind a login (dashboards, apps, anything gated
+by auth), point agent-browser at your **already-running Chrome** so it reuses that
+session:
+
+1. Quit Chrome, then relaunch it with remote debugging enabled, and log into the site:
+
+   ```sh
+   # macOS
+   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222
+   ```
+
+   Some recent Chrome builds only allow remote debugging on a non-default profile — add
+   `--user-data-dir="$HOME/chrome-debug"` and sign in there if the attach is refused.
+
+2. Run the agent with autoconnect on — it discovers and attaches to that Chrome:
+
+   ```sh
+   AGENT_BROWSER_AUTO_CONNECT=1 uv run main.py "audit the accessibility of my dashboard at https://app.example.com/home"
+   ```
+
+Screenshots and audits then reflect the real, authenticated page. Any `AGENT_BROWSER_*`
+variable you set is forwarded to the browser (e.g. `AGENT_BROWSER_SCREENSHOT_DIR`); your
+API keys are not.
+
 ## Skills
 
 The agent itself is general — search + drive a browser. Task-specific workflows live as
