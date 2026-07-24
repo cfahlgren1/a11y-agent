@@ -1,5 +1,7 @@
 # a11y-agent
 
+![A seated humanoid robot auditing an annotated accessibility dashboard](assets/readme-hero-optimus.png)
+
 A CLI agent that audits web pages for accessibility, layout, and mobile issues — driving real headless Chromium (agent-browser) and streaming its findings to your terminal.
 
 ## Why?
@@ -8,16 +10,20 @@ With agents everyone is writing orders of magnitude more software. Token usage i
 
 `a11y-agent` walks the floor of your product — testing features, spotting issues, and finding what needs polish. Below is a real accessibility audit of the Tavily Dashboard, with genuine findings. It also works on pages search engines can't reach — like authenticated dashboards — as requested in [tavily-python#163](https://github.com/tavily-ai/tavily-python/issues/163).
 
+**→ [Read the report](examples/tavily-home/report.md)**
+
 ## How I built this
 
 Unfortunately, due to a Claude Code behavior that [skips saving transcripts inside child
-sessions](https://code.claude.com/docs/en/settings#environment-variables) (an inherited
-`CLAUDE_CODE_CHILD_SESSION` env marker — silent until v2.1.217 added a warning), I lost
-the `.jsonl` transcript of the build session. However, I was able to reconstruct most of
-it from what did survive — subagent metadata, file-history snapshots, git commits, and an
-independent Codex review log — and turned it into a webpage:
+sessions][claude-child-session] (an inherited `CLAUDE_CODE_CHILD_SESSION` env marker —
+silent until v2.1.217 added a warning), I lost the `.jsonl` transcript of the build
+session. However, I was able to reconstruct most of it from what did survive — subagent
+metadata, file-history snapshots, git commits, and an independent Codex review log — and
+turned it into a webpage:
 
 **→ [how-i-built-a11y-agent.vercel.app](https://how-i-built-a11y-agent.vercel.app/)**
+
+[claude-child-session]: https://code.claude.com/docs/en/env-vars#:~:text=CLAUDE_CODE_CHILD_SESSION
 
 ## Setup
 
