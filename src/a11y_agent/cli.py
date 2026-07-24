@@ -1,16 +1,19 @@
-"""Typer CLI entry point for the research agent."""
+"""Typer CLI entry point for the accessibility agent."""
 
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Annotated, Optional
 
 import typer
 from dotenv import load_dotenv
+from langchain_tavily import TavilySearch
 from rich.console import Console
 from rich.panel import Panel
 
 from .agent import build_agent
+from .browser import browser_tools, check_agent_browser
 from .rendering import StreamRenderer
 
 app = typer.Typer(add_completion=False)
@@ -37,36 +40,52 @@ def require_env() -> None:
         raise typer.Exit(code=1)
 
 
+def require_agent_browser() -> None:
+    """Exit early with an install hint if the agent-browser binary is missing/too old."""
+    error = check_agent_browser()
+    if error:
+        console.print(f"[bold red]{error}[/bold red]")
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def main(
-    question: Annotated[list[str], typer.Argument(help="Question")],
+    question: Annotated[list[str], typer.Argument(help="What to look at / ask")],
     model: Annotated[
         Optional[str],
         typer.Option(help="Model name (defaults to A11Y_AGENT_MODEL env var, then a built-in default)"),
     ] = None,
 ) -> None:
-    """Ask a question and stream a small LangChain agent that searches with Tavily."""
+    """Drive a browser-equipped agent with a prompt to inspect and audit web pages."""
     load_dotenv()
     require_env()
+    require_agent_browser()
 
     question_text = " ".join(question)
-    agent = build_agent(model=model)
 
-    console.print(Panel.fit(question_text, title="Question", border_style="cyan"))
+    console.print(Panel.fit(question_text, title="Prompt", border_style="cyan"))
     console.rule("[bold blue]Agent stream")
 
     try:
-        stream = agent.stream(
-            {"messages": [{"role": "user", "content": question_text}]},
-            stream_mode=["messages", "updates"],
-        )
-        StreamRenderer(console).render(stream)
+        asyncio.run(_run(question_text, model))
     except KeyboardInterrupt:
         console.print("\n[red]Interrupted.[/red]")
         raise typer.Exit(code=130) from None
     except Exception as exc:
         console.print(f"\n[bold red]Agent run failed:[/bold red] {exc}")
         raise typer.Exit(code=1) from None
+
+
+async def _run(question_text: str, model: Optional[str]) -> None:
+    """Load browser tools over MCP, build the agent, and stream the run."""
+    async with browser_tools() as browser:
+        tools = [TavilySearch(), *browser]
+        agent = build_agent(tools, model=model)
+        stream = agent.astream(
+            {"messages": [{"role": "user", "content": question_text}]},
+            stream_mode=["messages", "updates"],
+        )
+        await StreamRenderer(console).arender(stream)
 
 
 if __name__ == "__main__":

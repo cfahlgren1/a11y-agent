@@ -70,13 +70,24 @@ class StreamRenderer:
         self.console.file.flush()
 
     def render(self, stream: Any) -> None:
-        """Iterate the agent's (mode, data) stream and render each event."""
+        """Iterate a sync agent stream (`.stream`) and render each event."""
         for mode, data in stream:
-            if mode == "messages":
-                self._render_message_chunk(data)
-            elif mode == "updates":
-                self._render_update(data)
+            self._render_event(mode, data)
+        self._finish()
 
+    async def arender(self, stream: Any) -> None:
+        """Iterate an async agent stream (`.astream`, needed for MCP-backed tools)."""
+        async for mode, data in stream:
+            self._render_event(mode, data)
+        self._finish()
+
+    def _render_event(self, mode: str, data: Any) -> None:
+        if mode == "messages":
+            self._render_message_chunk(data)
+        elif mode == "updates":
+            self._render_update(data)
+
+    def _finish(self) -> None:
         if self._last_event_was_text:
             self.console.print()
 
